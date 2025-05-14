@@ -38,6 +38,17 @@ const transactionsController = {
         }
     },
 
+    async getAccountByUserId(user_id: number): Promise<any> {
+        const query = 'SELECT * FROM accounts WHERE user_id = $1';
+        const result = await AppDataSource.query(query, [user_id]);
+        return result.length > 0 ? result[0] : null;
+    },
+
+    async updateAccountBalance(user_id: number, newBalance: number): Promise<void> {
+        const query = 'UPDATE accounts SET balance = $1 WHERE user_id = $2';
+        await AppDataSource.query(query, [newBalance, user_id]);
+    },
+
     createTransaction: async (req: Request, res: Response) => {
         const { amount, cvu } = req.body;
         const sender_id = 1; // Este valor debería venir de la autenticación del usuario
@@ -89,7 +100,23 @@ const transactionsController = {
                 });
             }
 
-            // Procesar la transacción
+            // Obtener cuentas
+            const senderAccount = await transactionsController.getAccountByUserId(sender_id);
+            const receiverAccount = await transactionsController.getAccountByUserId(receiver_id);
+            if (!senderAccount || !receiverAccount) {
+                return res.status(404).json({ error: 'No se encontró la cuenta de origen o destino' });
+            }
+
+            // Verificar saldo suficiente
+            if (Number(senderAccount.balance) < Number(amount)) {
+                return res.status(400).json({ error: 'Saldo insuficiente para realizar la transferencia' });
+            }
+
+            // Actualizar saldos
+            await transactionsController.updateAccountBalance(sender_id, Number(senderAccount.balance) - Number(amount));
+            await transactionsController.updateAccountBalance(receiver_id, Number(receiverAccount.balance) + Number(amount));
+
+            // Registrar transacción
             const query = 'INSERT INTO transactions (amount, receiver_cvu, sender_id) VALUES ($1, $2, $3) RETURNING *';
             const result = await AppDataSource.query(query, [amount, cvu, sender_id]);
             
@@ -148,7 +175,23 @@ const transactionsController = {
                 });
             }
 
-            // Procesar la transacción
+            // Obtener cuentas
+            const senderAccount = await transactionsController.getAccountByUserId(sender_id);
+            const receiverAccount = await transactionsController.getAccountByUserId(receiver_id);
+            if (!senderAccount || !receiverAccount) {
+                return res.status(404).json({ error: 'No se encontró la cuenta de origen o destino' });
+            }
+
+            // Verificar saldo suficiente
+            if (Number(senderAccount.balance) < Number(amount)) {
+                return res.status(400).json({ error: 'Saldo insuficiente para realizar la transferencia' });
+            }
+
+            // Actualizar saldos
+            await transactionsController.updateAccountBalance(sender_id, Number(senderAccount.balance) - Number(amount));
+            await transactionsController.updateAccountBalance(receiver_id, Number(receiverAccount.balance) + Number(amount));
+
+            // Registrar transacción
             const query = 'INSERT INTO transactions (amount, receiver_cvu, sender_id) VALUES ($1, $2, $3) RETURNING *';
             const result = await AppDataSource.query(query, [amount, cvu, sender_id]);
             

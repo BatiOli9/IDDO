@@ -4,6 +4,7 @@ import dotenv from 'dotenv';
 import cors from 'cors';
 import { AppDataSource } from './config/database';
 import transactionsRouter from './router/transactionsRouter';
+import balanceRouter from './router/balanceRouter';
 
 // Configuración de variables de entorno
 dotenv.config();
@@ -31,6 +32,7 @@ AppDataSource.initialize()
 
 // Rutas
 app.use('/transactions', transactionsRouter);
+app.use('/balance', balanceRouter);
 
 // Ruta de prueba
 app.get('/', (req: Request, res: Response) => {
