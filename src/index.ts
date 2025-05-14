@@ -3,6 +3,7 @@ import express, { Express, Request, Response, NextFunction } from 'express';
 import dotenv from 'dotenv';
 import cors from 'cors';
 import { AppDataSource } from './config/database';
+import transactionsRouter from './router/transactionsRouter';
 
 // Configuración de variables de entorno
 dotenv.config();
@@ -28,6 +29,9 @@ AppDataSource.initialize()
     })
     .catch((error) => console.log("Error al conectar con la base de datos:", error));
 
+// Rutas
+app.use('/transactions', transactionsRouter);
+
 // Ruta de prueba
 app.get('/', (req: Request, res: Response) => {
   res.json({ message: 'IDDO FUNCIONANDO CORRECTAMENTE' });
@@ -40,4 +44,4 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 // Iniciar el servidor
 app.listen(port, () => {
   console.log(`⚡️[servidor]: Servidor corriendo en http://localhost:${port}`);
-}); 
+});
