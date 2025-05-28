@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import { AppDataSource } from "../config/database";
+import { voucherService } from "../services/voucherService";
 
 const transactionsController = {
     // Función para verificar si existe el CVU
@@ -47,6 +48,54 @@ const transactionsController = {
     async updateAccountBalance(user_id: number, newBalance: number): Promise<void> {
         const query = 'UPDATE accounts SET balance = $1 WHERE user_id = $2';
         await AppDataSource.query(query, [newBalance, user_id]);
+    },
+
+    // Nueva función para obtener información del usuario
+    async getUserInfo(user_id: number): Promise<any> {
+        try {
+            const query = 'SELECT * FROM users WHERE id = $1';
+            const result = await AppDataSource.query(query, [user_id]);
+            return result.length > 0 ? result[0] : null;
+        } catch (error) {
+            console.error('Error al obtener información del usuario:', error);
+            throw error;
+        }
+    },
+
+    // Nueva función para validar límite de transferencia
+    async validateTransferLimit(user_id: number, amount: number): Promise<{ valid: boolean; message?: string }> {
+        try {
+            const userInfo = await transactionsController.getUserInfo(user_id);
+            
+            if (!userInfo) {
+                return { valid: false, message: 'Usuario no encontrado' };
+            }
+
+            // Si es un adulto (hierarchy = false), no hay límite
+            if (!userInfo.hierarchy) {
+                return { valid: true };
+            }
+
+            // Si es un menor (hierarchy = true) pero no tiene límite configurado
+            if (!userInfo.limit) {
+                return { 
+                    valid: false, 
+                    message: 'No se encontró un límite configurado para el usuario menor'
+                };
+            }
+
+            if (Number(amount) > Number(userInfo.limit)) {
+                return { 
+                    valid: false, 
+                    message: `El monto excede el límite permitido de ${userInfo.limit}`
+                };
+            }
+
+            return { valid: true };
+        } catch (error) {
+            console.error('Error al validar límite de transferencia:', error);
+            throw error;
+        }
     },
 
     createTransaction: async (req: Request, res: Response) => {
@@ -100,6 +149,14 @@ const transactionsController = {
                 });
             }
 
+            // Validar límite de transferencia para usuarios menores
+            const limitValidation = await transactionsController.validateTransferLimit(sender_id, amount);
+            if (!limitValidation.valid) {
+                return res.status(400).json({
+                    error: limitValidation.message
+                });
+            }
+
             // Obtener cuentas
             const senderAccount = await transactionsController.getAccountByUserId(sender_id);
             const receiverAccount = await transactionsController.getAccountByUserId(receiver_id);
@@ -116,13 +173,39 @@ const transactionsController = {
             await transactionsController.updateAccountBalance(sender_id, Number(senderAccount.balance) - Number(amount));
             await transactionsController.updateAccountBalance(receiver_id, Number(receiverAccount.balance) + Number(amount));
 
-            // Registrar transacción
-            const query = 'INSERT INTO transactions (amount, receiver_cvu, sender_id) VALUES ($1, $2, $3) RETURNING *';
-            const result = await AppDataSource.query(query, [amount, cvu, sender_id]);
+            // Obtener información de los usuarios para el voucher
+            const senderInfo = await transactionsController.getUserInfo(sender_id);
+            const receiverInfo = await transactionsController.getUserInfo(receiver_id);
+
+            // Registrar transacción con sender_id y receiver_id
+            const query = 'INSERT INTO transactions (amount, sender_id, receiver_id) VALUES ($1, $2, $3) RETURNING *';
+            const result = await AppDataSource.query(query, [amount, sender_id, receiver_id]);
+            
+            // Generar y subir el voucher
+            const voucherUrl = await voucherService.generateAndUploadVoucher({
+                transactionId: result[0].id,
+                amount: Number(amount),
+                senderName: senderInfo.name,
+                senderCVU: senderInfo.cvu,
+                senderDNI: senderInfo.dni,
+                receiverName: receiverInfo.name,
+                receiverCVU: receiverInfo.cvu,
+                receiverDNI: receiverInfo.dni,
+                date: new Date()
+            });
+
+            // Actualizar la transacción con la URL del voucher
+            await AppDataSource.query(
+                'UPDATE transactions SET voucher = $1 WHERE id = $2',
+                [voucherUrl, result[0].id]
+            );
             
             return res.status(201).json({
                 message: 'Transacción creada exitosamente',
-                transaction: result[0]
+                transaction: {
+                    ...result[0],
+                    voucher_url: voucherUrl
+                }
             });
         } catch (error) {
             console.error('Error al procesar la transacción:', error);
@@ -134,7 +217,7 @@ const transactionsController = {
 
     createTransactionAlias: async (req: Request, res: Response) => {
         const { amount, alias } = req.body;
-        const sender_id = 1; // Este valor debería venir de la autenticación del usuario
+        const sender_id = 3; // Este valor debería venir de la autenticación del usuario
 
         // Validar que los campos requeridos existan
         if (!amount || !alias) {
@@ -175,6 +258,14 @@ const transactionsController = {
                 });
             }
 
+            // Validar límite de transferencia para usuarios menores
+            const limitValidation = await transactionsController.validateTransferLimit(sender_id, amount);
+            if (!limitValidation.valid) {
+                return res.status(400).json({
+                    error: limitValidation.message
+                });
+            }
+
             // Obtener cuentas
             const senderAccount = await transactionsController.getAccountByUserId(sender_id);
             const receiverAccount = await transactionsController.getAccountByUserId(receiver_id);
@@ -191,13 +282,39 @@ const transactionsController = {
             await transactionsController.updateAccountBalance(sender_id, Number(senderAccount.balance) - Number(amount));
             await transactionsController.updateAccountBalance(receiver_id, Number(receiverAccount.balance) + Number(amount));
 
-            // Registrar transacción
-            const query = 'INSERT INTO transactions (amount, receiver_cvu, sender_id) VALUES ($1, $2, $3) RETURNING *';
-            const result = await AppDataSource.query(query, [amount, cvu, sender_id]);
+            // Obtener información de los usuarios para el voucher
+            const senderInfo = await transactionsController.getUserInfo(sender_id);
+            const receiverInfo = await transactionsController.getUserInfo(receiver_id);
+
+            // Registrar transacción con sender_id y receiver_id
+            const query = 'INSERT INTO transactions (amount, sender_id, receiver_id) VALUES ($1, $2, $3) RETURNING *';
+            const result = await AppDataSource.query(query, [amount, sender_id, receiver_id]);
+            
+            // Generar y subir el voucher
+            const voucherUrl = await voucherService.generateAndUploadVoucher({
+                transactionId: result[0].id,
+                amount: Number(amount),
+                senderName: senderInfo.name,
+                senderCVU: senderInfo.cvu,
+                senderDNI: senderInfo.dni,
+                receiverName: receiverInfo.name,
+                receiverCVU: receiverInfo.cvu,
+                receiverDNI: receiverInfo.dni,
+                date: new Date()
+            });
+
+            // Actualizar la transacción con la URL del voucher
+            await AppDataSource.query(
+                'UPDATE transactions SET voucher = $1 WHERE id = $2',
+                [voucherUrl, result[0].id]
+            );
             
             return res.status(201).json({
                 message: 'Transacción creada exitosamente',
-                transaction: result[0]
+                transaction: {
+                    ...result[0],
+                    voucher_url: voucherUrl
+                }
             });
         } catch (error) {
             console.error('Error al procesar la transacción:', error);
