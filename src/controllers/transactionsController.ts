@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { AppDataSource } from "../config/database";
 import { voucherService } from "../services/voucherService";
+import { sendParentNotification, sendLimitExceededNotification } from '../services/emailService';
 
 const transactionsController = {
     // Función para verificar si existe el CVU
@@ -149,9 +150,32 @@ const transactionsController = {
                 });
             }
 
+            // Obtener información de los usuarios para validaciones y mails
+            const senderInfo = await transactionsController.getUserInfo(sender_id);
+            const receiverInfo = await transactionsController.getUserInfo(receiver_id);
+
             // Validar límite de transferencia para usuarios menores
             const limitValidation = await transactionsController.validateTransferLimit(sender_id, amount);
             if (!limitValidation.valid) {
+                // Si es menor y supera el límite, notificar al padre
+                if (senderInfo.hierarchy) {
+                    const parentResult = await AppDataSource.query('SELECT parent_id FROM parents WHERE child_id = $1', [sender_id]);
+                    if (parentResult.length > 0) {
+                        const parentId = parentResult[0].parent_id;
+                        const parentUser = await AppDataSource.query('SELECT email FROM users WHERE id = $1', [parentId]);
+                        if (parentUser.length > 0) {
+                            const parentEmail = parentUser[0].email;
+                            await sendLimitExceededNotification({
+                                parentEmail,
+                                childName: senderInfo.name,
+                                amount: Number(amount),
+                                limit: senderInfo.limit,
+                                receiverName: receiverInfo ? receiverInfo.name : '',
+                                date: new Date()
+                            });
+                        }
+                    }
+                }
                 return res.status(400).json({
                     error: limitValidation.message
                 });
@@ -172,10 +196,6 @@ const transactionsController = {
             // Actualizar saldos
             await transactionsController.updateAccountBalance(sender_id, Number(senderAccount.balance) - Number(amount));
             await transactionsController.updateAccountBalance(receiver_id, Number(receiverAccount.balance) + Number(amount));
-
-            // Obtener información de los usuarios para el voucher
-            const senderInfo = await transactionsController.getUserInfo(sender_id);
-            const receiverInfo = await transactionsController.getUserInfo(receiver_id);
 
             // Registrar transacción con sender_id y receiver_id
             const query = 'INSERT INTO transactions (amount, sender_id, receiver_id) VALUES ($1, $2, $3) RETURNING *';
@@ -200,6 +220,28 @@ const transactionsController = {
                 [voucherUrl, result[0].id]
             );
             
+            // Después de registrar la transacción y generar el voucher
+            // Notificar al padre si el usuario es menor
+            if (senderInfo.hierarchy) {
+                // Buscar el parent_id en la tabla parents
+                const parentResult = await AppDataSource.query('SELECT parent_id FROM parents WHERE child_id = $1', [sender_id]);
+                if (parentResult.length > 0) {
+                    const parentId = parentResult[0].parent_id;
+                    // Buscar el email del padre
+                    const parentUser = await AppDataSource.query('SELECT email FROM users WHERE id = $1', [parentId]);
+                    if (parentUser.length > 0) {
+                        const parentEmail = parentUser[0].email;
+                        await sendParentNotification({
+                            parentEmail,
+                            childName: senderInfo.name,
+                            amount: Number(amount),
+                            receiverName: receiverInfo.name,
+                            date: new Date()
+                        });
+                    }
+                }
+            }
+
             return res.status(201).json({
                 message: 'Transacción creada exitosamente',
                 transaction: {
@@ -258,9 +300,32 @@ const transactionsController = {
                 });
             }
 
+            // Obtener información de los usuarios para validaciones y mails
+            const senderInfo = await transactionsController.getUserInfo(sender_id);
+            const receiverInfo = await transactionsController.getUserInfo(receiver_id);
+
             // Validar límite de transferencia para usuarios menores
             const limitValidation = await transactionsController.validateTransferLimit(sender_id, amount);
             if (!limitValidation.valid) {
+                // Si es menor y supera el límite, notificar al padre
+                if (senderInfo.hierarchy) {
+                    const parentResult = await AppDataSource.query('SELECT parent_id FROM parents WHERE child_id = $1', [sender_id]);
+                    if (parentResult.length > 0) {
+                        const parentId = parentResult[0].parent_id;
+                        const parentUser = await AppDataSource.query('SELECT email FROM users WHERE id = $1', [parentId]);
+                        if (parentUser.length > 0) {
+                            const parentEmail = parentUser[0].email;
+                            await sendLimitExceededNotification({
+                                parentEmail,
+                                childName: senderInfo.name,
+                                amount: Number(amount),
+                                limit: senderInfo.limit,
+                                receiverName: receiverInfo ? receiverInfo.name : '',
+                                date: new Date()
+                            });
+                        }
+                    }
+                }
                 return res.status(400).json({
                     error: limitValidation.message
                 });
@@ -281,10 +346,6 @@ const transactionsController = {
             // Actualizar saldos
             await transactionsController.updateAccountBalance(sender_id, Number(senderAccount.balance) - Number(amount));
             await transactionsController.updateAccountBalance(receiver_id, Number(receiverAccount.balance) + Number(amount));
-
-            // Obtener información de los usuarios para el voucher
-            const senderInfo = await transactionsController.getUserInfo(sender_id);
-            const receiverInfo = await transactionsController.getUserInfo(receiver_id);
 
             // Registrar transacción con sender_id y receiver_id
             const query = 'INSERT INTO transactions (amount, sender_id, receiver_id) VALUES ($1, $2, $3) RETURNING *';
@@ -309,6 +370,28 @@ const transactionsController = {
                 [voucherUrl, result[0].id]
             );
             
+            // Después de registrar la transacción y generar el voucher
+            // Notificar al padre si el usuario es menor
+            if (senderInfo.hierarchy) {
+                // Buscar el parent_id en la tabla parents
+                const parentResult = await AppDataSource.query('SELECT parent_id FROM parents WHERE child_id = $1', [sender_id]);
+                if (parentResult.length > 0) {
+                    const parentId = parentResult[0].parent_id;
+                    // Buscar el email del padre
+                    const parentUser = await AppDataSource.query('SELECT email FROM users WHERE id = $1', [parentId]);
+                    if (parentUser.length > 0) {
+                        const parentEmail = parentUser[0].email;
+                        await sendParentNotification({
+                            parentEmail,
+                            childName: senderInfo.name,
+                            amount: Number(amount),
+                            receiverName: receiverInfo.name,
+                            date: new Date()
+                        });
+                    }
+                }
+            }
+
             return res.status(201).json({
                 message: 'Transacción creada exitosamente',
                 transaction: {
