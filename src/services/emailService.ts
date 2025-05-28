@@ -197,10 +197,10 @@ export async function sendLimitExceededNotification({
     <body>
       <div class="mail-container">
         <div class="mail-title">Intento de transferencia bloqueado</div>
-        <div class="mail-info">Le informamos que su hijo/a <b>${childName}</b> intentó realizar una transferencia que excede el límite permitido.</div>
+        <div class="mail-info">Le informamos que su hijo/a <b>${childName}</b> intentó realizar una transferencia que excede el <b>límite diario</b> permitido.</div>
         <div class="mail-amount">Monto intentado: $ ${amount.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</div>
         <div class="mail-section">
-          <div><span class="mail-label">Límite permitido:</span> $ ${limit.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</div>
+          <div><span class="mail-label">Límite diario permitido:</span> $ ${limit.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</div>
           <div><span class="mail-label">Destinatario:</span> ${receiverName}</div>
           <div><span class="mail-label">Fecha:</span> ${date.toLocaleString('es-AR')}</div>
         </div>
@@ -215,7 +215,7 @@ export async function sendLimitExceededNotification({
     const mailOptions = {
         from: process.env.EMAIL_USER,
         to: parentEmail,
-        subject: 'Intento de transferencia bloqueado por límite',
+        subject: 'Intento de transferencia bloqueado por límite diario',
         html
     };
     await transporter.sendMail(mailOptions);

@@ -99,6 +99,17 @@ const transactionsController = {
         }
     },
 
+    // Nueva función para calcular el total transferido en el día por un usuario
+    async getTotalTransferredToday(user_id: number): Promise<number> {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const tomorrow = new Date(today);
+        tomorrow.setDate(today.getDate() + 1);
+        const query = `SELECT COALESCE(SUM(amount), 0) as total FROM transactions WHERE sender_id = $1 AND created_at >= $2 AND created_at < $3`;
+        const result = await AppDataSource.query(query, [user_id, today, tomorrow]);
+        return Number(result[0].total);
+    },
+
     createTransaction: async (req: Request, res: Response) => {
         const { amount, cvu } = req.body;
         const sender_id = 1; // Este valor debería venir de la autenticación del usuario
@@ -179,6 +190,33 @@ const transactionsController = {
                 return res.status(400).json({
                     error: limitValidation.message
                 });
+            }
+
+            // Validar límite diario para menores
+            if (senderInfo.hierarchy && senderInfo.limit_day) {
+                const totalHoy = await transactionsController.getTotalTransferredToday(sender_id);
+                if (totalHoy + Number(amount) > Number(senderInfo.limit_day)) {
+                    // Notificar al padre
+                    const parentResult = await AppDataSource.query('SELECT parent_id FROM parents WHERE child_id = $1', [sender_id]);
+                    if (parentResult.length > 0) {
+                        const parentId = parentResult[0].parent_id;
+                        const parentUser = await AppDataSource.query('SELECT email FROM users WHERE id = $1', [parentId]);
+                        if (parentUser.length > 0) {
+                            const parentEmail = parentUser[0].email;
+                            await sendLimitExceededNotification({
+                                parentEmail,
+                                childName: senderInfo.name,
+                                amount: Number(amount),
+                                limit: senderInfo.limit_day,
+                                receiverName: receiverInfo ? receiverInfo.name : '',
+                                date: new Date()
+                            });
+                        }
+                    }
+                    return res.status(400).json({
+                        error: `El monto excede el límite diario permitido de ${senderInfo.limit_day}`
+                    });
+                }
             }
 
             // Obtener cuentas
@@ -329,6 +367,33 @@ const transactionsController = {
                 return res.status(400).json({
                     error: limitValidation.message
                 });
+            }
+
+            // Validar límite diario para menores
+            if (senderInfo.hierarchy && senderInfo.limit_day) {
+                const totalHoy = await transactionsController.getTotalTransferredToday(sender_id);
+                if (totalHoy + Number(amount) > Number(senderInfo.limit_day)) {
+                    // Notificar al padre
+                    const parentResult = await AppDataSource.query('SELECT parent_id FROM parents WHERE child_id = $1', [sender_id]);
+                    if (parentResult.length > 0) {
+                        const parentId = parentResult[0].parent_id;
+                        const parentUser = await AppDataSource.query('SELECT email FROM users WHERE id = $1', [parentId]);
+                        if (parentUser.length > 0) {
+                            const parentEmail = parentUser[0].email;
+                            await sendLimitExceededNotification({
+                                parentEmail,
+                                childName: senderInfo.name,
+                                amount: Number(amount),
+                                limit: senderInfo.limit_day,
+                                receiverName: receiverInfo ? receiverInfo.name : '',
+                                date: new Date()
+                            });
+                        }
+                    }
+                    return res.status(400).json({
+                        error: `El monto excede el límite diario permitido de ${senderInfo.limit_day}`
+                    });
+                }
             }
 
             // Obtener cuentas
