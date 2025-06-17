@@ -35,11 +35,12 @@ app.use('/transactions', transactionsRouter);
 app.use('/balance', balanceRouter);
 
 // Ruta de prueba
-app.get('/', (req: Request, res: Response) => {
+app.get('/', (_: Request, res: Response) => {
   res.json({ message: 'IDDO FUNCIONANDO CORRECTAMENTE' });
 });
 
-app.use((req: Request, res: Response, next: NextFunction) => {
+// @ts-ignore
+app.use((_: Request, res: Response, next: NextFunction) => {
     res.status(404).send('Lo siento, no se encontró la página solicitada. ERROR 404'); 
 });
 
