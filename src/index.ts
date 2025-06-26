@@ -5,6 +5,7 @@ import cors from 'cors';
 import { AppDataSource } from './config/database';
 import transactionsRouter from './router/transactionsRouter';
 import balanceRouter from './router/balanceRouter';
+import indexRouter from './router/indexRouter';
 
 // Configuración de variables de entorno
 dotenv.config();
@@ -31,6 +32,7 @@ AppDataSource.initialize()
     .catch((error) => console.log("Error al conectar con la base de datos:", error));
 
 // Rutas
+app.use('/', indexRouter);
 app.use('/transactions', transactionsRouter);
 app.use('/balance', balanceRouter);
 
