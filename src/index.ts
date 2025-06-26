@@ -7,15 +7,13 @@ import transactionsRouter from './router/transactionsRouter';
 import balanceRouter from './router/balanceRouter';
 import indexRouter from './router/indexRouter';
 
-// Configuración de variables de entorno
 dotenv.config();
 
 const app: Express = express();
-const port = process.env.PORT || 3000;
 
 // Middleware
 const corsOptions = {
-  origin: "*", // Cambia esto a un dominio específico en producción
+  origin: "*",
   methods: ["GET", "POST", "OPTIONS", "DELETE", "PUT"],
   optionsSuccessStatus: 200
 };
@@ -46,7 +44,5 @@ app.use((_: Request, res: Response, next: NextFunction) => {
     res.status(404).send('Lo siento, no se encontró la página solicitada. ERROR 404'); 
 });
 
-// Iniciar el servidor
-app.listen(port, () => {
-  console.log(`⚡️[servidor]: Servidor corriendo en http://localhost:${port}`);
-});
+// NO USAR app.listen EN VERCEL
+export default app;
